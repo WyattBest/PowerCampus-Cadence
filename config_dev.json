@@ -1,9 +1,0 @@
-{
-    "api_url": " https://api.mongooseresearch.com",
-    "api_key": "ODk1NWQwMzYtMGQ3YS00MGNlLWI2MDctY2ExNTJiMWExNzVl",
-    "api_secret": "NDcwNWE4ZWMtZGFjNS00ZWU0LTllNDctOWIyOWIwYWMzMzdh",
-    "pc_database_string": "Driver={ODBC Driver 17 for SQL Server};Server=vmcnypc01;Database=Campus6_suppMCNY;Trusted_Connection=yes;ServerSPN=MSSQLSvc/vmcnypc01.mcny.edu;",
-    "dept_codes": [
-        "SS"
-    ]
-}

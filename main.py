@@ -1,4 +1,3 @@
-from os import stat, stat_result, truncate
 import requests
 import json
 import pyodbc
@@ -53,15 +52,14 @@ def eval_opt_state(local, remote, sync):
 
 def pc_get_sms(pcid, dept):
     '''Return boolean of SMS Opt-In status in PowerCampus Telecommunications.'''
-    CURSOR.execute('''SELECT [STATUS] FROM TELECOMMUNICATIONS WHERE PEOPLE_ORG_CODE_ID = ? AND COM_TYPE = 'SMS' + ?''',
-                   pcid, dept)
-    status = row['STATUS']
-    if status == 'A':
-        return True
-    elif status == 'I':
-        return False
-    else:
-        return None
+    CURSOR.execute(
+        '''select [STATUS] from [CAMPUS6].[DBO].[TELECOMMUNICATIONS]
+             where [PEOPLE_ORG_CODE_ID] = ? AND [COM_TYPE] = ?''', pcid, 'SMS' + dept)
+    row = CURSOR.fetchone()
+    status = row.STATUS
+    status_mapping = {'A': True, 'I': False}
+
+    return status_mapping[status]
 
 
 with open('config_dev.json') as file:
@@ -81,26 +79,42 @@ print(CNXN.getinfo(pyodbc.SQL_DATABASE_NAME))  # Print a test of connection
 
 for dept in CONFIG['dept_codes']:
 
-    # Get local sync records from SQL and add to dict with PCID as key
-    local_sync = []
+    # Get last sync state records from SQL and add to dict with PCID as key
+    lss_contacts = []
     CURSOR.execute(
         'select top 10 * from [cadence].[Contacts] where DepartmentCode = ?', dept)
     columns = [column[0] for column in CURSOR.description]
     for row in CURSOR.fetchall():
-        local_sync.append(dict(zip(columns, row)))
-    local_sync = {k['PEOPLE_CODE_ID']: k for k in local_sync}
+        lss_contacts.append(dict(zip(columns, row)))
+    lss_contacts = {k['PEOPLE_CODE_ID']: k for k in lss_contacts}
 
     # Fetch each local contact from Cadence and add to dict with PCID as key
     remote_contacts = {}
-    for k, v in local_sync.items():
+    for k, v in lss_contacts.items():
         mobile = v['MobileNumber']
         r = HTTP_SESSION.get(api_url + '/v2/contacts/SS/' + mobile)
         r.raise_for_status()
         r = json.loads(r.text)
         remote_contacts[r['contactId']] = r
 
-    for k, v in local_sync.items():
+    # # Fetch each student from PowerCampus
+    # # TODO: Don't limit this to just contacts from lss_contacts
+    # sis_contacts = {}
+    # for k, v in lss_contacts.items():
+    #     print(v['PEOPLE_CODE_ID'])
+    #     CURSOR.execute(
+    #         '''select [STATUS] from [CAMPUS6].[DBO].[TELECOMMUNICATIONS]
+    #         where [PEOPLE_ORG_CODE_ID] = ? AND [COM_TYPE] = ?''', v['PEOPLE_CODE_ID'], 'SMS' + dept)
+    #     row = CURSOR.fetchone()
+    #     opt = telecom_status[row.STATUS]
+    #     sis_contacts[k] = {'smsOptIn': opt}
+
+    for k, v in lss_contacts.items():
         # If item exists on remote server
         if k in remote_contacts:
-            opt = pc_get_sms(v['PEOPLE_CODE_ID'], 'SS')
-            opt_target = eval_opt_state(opt, remote_contacts[k]['optedOut'], )
+            optin_local = pc_get_sms(v['PEOPLE_CODE_ID'], dept)
+            opt_newstate = eval_opt_state(
+                optin_local, not remote_contacts[k]['optedOut'], not v['optedOut'])
+            print(optin_local, not remote_contacts[k]['optedOut'], not v['optedOut'])
+            print(opt_newstate)
+            print('----')

@@ -5,13 +5,6 @@ import pyodbc
 from requests.models import HTTPBasicAuth
 
 
-def has_changed(old, new):
-    if old == y:
-        return False
-    else:
-        return True
-
-
 def eval_opt_state(local, remote, sync):
     """Return tuple of the target state of each argument and whether it has changed.
     Intended for deciding how to sync Opt-In flag, which can be changed from either end.
@@ -62,6 +55,29 @@ def pc_get_sms(pcid, dept):
     return status_mapping[status]
 
 
+def pc_get_students():
+    '''Return a list of students.'''
+    sis_contacts = []
+    CURSOR.execute('exec Campus6.[custom].[CadenceSelContacts]')
+    columns = [column[0] for column in CURSOR.description]
+    for row in CURSOR.fetchall():
+        sis_contacts.append(dict(zip(columns, row)))
+
+    return sis_contacts
+
+
+def pc_get_last_sync_state(dept):
+    '''Return a list of contacts as they were last synced.'''
+    contacts = []
+    CURSOR.execute('exec cadence.selLastSyncState ?', dept)
+    print(CNXN.getinfo(pyodbc.SQL_DATABASE_NAME))
+    columns = [column[0] for column in CURSOR.description]
+    for row in CURSOR.fetchall():
+        contacts.append(dict(zip(columns, row)))
+
+    return contacts
+
+
 with open('config_dev.json') as file:
     CONFIG = json.load(file)
 
@@ -73,48 +89,39 @@ HTTP_SESSION.auth = (api_key, api_secret)
 
 # Microsoft SQL Server connection.
 CNXN = pyodbc.connect(CONFIG['pc_database_string'])
+# CNXN.autocommit = True
 CURSOR = CNXN.cursor()
 print(CNXN.getinfo(pyodbc.SQL_DATABASE_NAME))  # Print a test of connection
 
+# Fetch students from PowerCampus and nest it inside a dict
+# {'P000000000': {'sis': {'foo':'bar'}}}
+contacts = {}
+contacts = {k['PEOPLE_CODE_ID']: {'sis': k} for k in pc_get_students()}
 
 for dept in CONFIG['dept_codes']:
 
-    # Get last sync state records from SQL and add to dict with PCID as key
-    lss_contacts = []
-    CURSOR.execute(
-        'select top 10 * from [cadence].[Contacts] where DepartmentCode = ?', dept)
-    columns = [column[0] for column in CURSOR.description]
-    for row in CURSOR.fetchall():
-        lss_contacts.append(dict(zip(columns, row)))
-    lss_contacts = {k['PEOPLE_CODE_ID']: k for k in lss_contacts}
+    # Add last sync state dict inside existing contacts dict
+    # {'P000000000': {'lss': {'foo':'bar'}}, {'sis': {'foo':'bar'}}}
+    contacts = {k['PEOPLE_CODE_ID']: {'lss': k}
+                for k in pc_get_last_sync_state(dept)}
 
+    # Add remote state dict inside existing contacts dict
     # Fetch each local contact from Cadence and add to dict with PCID as key
-    remote_contacts = {}
-    for k, v in lss_contacts.items():
-        mobile = v['MobileNumber']
+    # {'P000000000': {'remote': {'foo':'bar'}}, {'sis': {'foo':'bar'}}, ...}
+    for k, v in contacts.items():
+        mobile = v['lss']['MobileNumber']
         r = HTTP_SESSION.get(api_url + '/v2/contacts/SS/' + mobile)
         r.raise_for_status()
         r = json.loads(r.text)
-        remote_contacts[r['contactId']] = r
+        contacts[k]['remote'] = r
 
-    # # Fetch each student from PowerCampus
-    # # TODO: Don't limit this to just contacts from lss_contacts
-    # sis_contacts = {}
-    # for k, v in lss_contacts.items():
-    #     print(v['PEOPLE_CODE_ID'])
-    #     CURSOR.execute(
-    #         '''select [STATUS] from [CAMPUS6].[DBO].[TELECOMMUNICATIONS]
-    #         where [PEOPLE_ORG_CODE_ID] = ? AND [COM_TYPE] = ?''', v['PEOPLE_CODE_ID'], 'SMS' + dept)
-    #     row = CURSOR.fetchone()
-    #     opt = telecom_status[row.STATUS]
-    #     sis_contacts[k] = {'smsOptIn': opt}
-
-    for k, v in lss_contacts.items():
+    for k, v in contacts.items():
         # If item exists on remote server
-        if k in remote_contacts:
-            optin_local = pc_get_sms(v['PEOPLE_CODE_ID'], dept)
+        if 'remote' in v:
+            optin_local = pc_get_sms(k, dept)
             opt_newstate = eval_opt_state(
-                optin_local, not remote_contacts[k]['optedOut'], not v['optedOut'])
-            print(optin_local, not remote_contacts[k]['optedOut'], not v['optedOut'])
+                optin_local, not v['remote']['optedOut'], not v['lss']['optedOut'])
+            print(optin_local, not v['remote']
+                  ['optedOut'], not v['lss']['optedOut'])
             print(opt_newstate)
             print('----')

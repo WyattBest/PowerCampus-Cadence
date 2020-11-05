@@ -2,10 +2,8 @@ import requests
 import json
 import pyodbc
 
-from requests.models import HTTPBasicAuth
 
-
-def eval_opt_state(local, remote, sync):
+def eval_sync_state(local, remote, sync):
     """Return tuple of the target state of each argument and whether it has changed.
     Intended for deciding how to sync Opt-In flag, which can be changed from either end.
     The logic behind this is as follows:
@@ -44,15 +42,17 @@ def eval_opt_state(local, remote, sync):
 
 
 def pc_get_sms(pcid, dept):
-    '''Return boolean of SMS Opt-In status in PowerCampus Telecommunications.'''
+    '''Return boolean of SMS Opt-In status in PowerCampus Telecommunications or None if nothing in Telecommunications.'''
     CURSOR.execute(
         '''select [STATUS] from [CAMPUS6].[DBO].[TELECOMMUNICATIONS]
              where [PEOPLE_ORG_CODE_ID] = ? AND [COM_TYPE] = ?''', pcid, 'SMS' + dept)
     row = CURSOR.fetchone()
-    status = row.STATUS
-    status_mapping = {'A': True, 'I': False}
-
-    return status_mapping[status]
+    if row is not None:
+        status = row.STATUS
+        status_mapping = {'A': True, 'I': False}
+        return status_mapping[status]
+    else:
+        return None
 
 
 def pc_get_students():
@@ -70,12 +70,16 @@ def pc_get_last_sync_state(dept):
     '''Return a list of contacts as they were last synced.'''
     contacts = []
     CURSOR.execute('exec cadence.selLastSyncState ?', dept)
-    print(CNXN.getinfo(pyodbc.SQL_DATABASE_NAME))
     columns = [column[0] for column in CURSOR.description]
     for row in CURSOR.fetchall():
         contacts.append(dict(zip(columns, row)))
 
     return contacts
+
+
+def cadence_post_contact():
+    '''Create/update contact in Cadence and update local sync state table.'''
+    return None
 
 
 with open('config_dev.json') as file:
@@ -101,15 +105,23 @@ contacts = {k['PEOPLE_CODE_ID']: {'sis': k} for k in pc_get_students()}
 for dept in CONFIG['dept_codes']:
 
     # Add last sync state dict inside existing contacts dict
-    # {'P000000000': {'lss': {'foo':'bar'}}, {'sis': {'foo':'bar'}}}
-    contacts = {k['PEOPLE_CODE_ID']: {'lss': k}
-                for k in pc_get_last_sync_state(dept)}
+    # {'P000000000': {'lss': {'foo':'bar'}, 'sis': {'foo':'bar'}}}
+    for k in pc_get_last_sync_state(dept):
+        if k['PEOPLE_CODE_ID'] in contacts:
+            contacts[k['PEOPLE_CODE_ID']]['lss'] = k
+        else:
+            contacts.update({k['PEOPLE_CODE_ID']: {'lss': k}})
 
     # Add remote state dict inside existing contacts dict
     # Fetch each local contact from Cadence and add to dict with PCID as key
-    # {'P000000000': {'remote': {'foo':'bar'}}, {'sis': {'foo':'bar'}}, ...}
+    # {'P000000000': {'remote': {'foo':'bar'}, 'sis': {'foo':'bar'}, ...}}
     for k, v in contacts.items():
-        mobile = v['lss']['MobileNumber']
+        if 'MobileNumber' in v['lss']:
+            mobile = v['lss']['MobileNumber']
+        else:
+            # Might as well see if any SIS contacts were manually added at remote end
+            mobile = v['sis']['MobileNumber']
+
         r = HTTP_SESSION.get(api_url + '/v2/contacts/SS/' + mobile)
         r.raise_for_status()
         r = json.loads(r.text)
@@ -119,9 +131,23 @@ for dept in CONFIG['dept_codes']:
         # If item exists on remote server
         if 'remote' in v:
             optin_local = pc_get_sms(k, dept)
-            opt_newstate = eval_opt_state(
+            opt_newstate = eval_sync_state(
                 optin_local, not v['remote']['optedOut'], not v['lss']['optedOut'])
             print(optin_local, not v['remote']
                   ['optedOut'], not v['lss']['optedOut'])
             print(opt_newstate)
             print('----')
+
+    # Find new items to put into Cadence
+    for k, v in contacts.items():
+        if 'remote' not in v:
+            cadence_post_contact()
+
+    # If a contact's mobileNumber changed in SIS, update Cadence and LSS
+    for k, v in contacts.items():
+        fields = ['firstName', 'lastName', 'mobileNumber']
+        sis = v['sis']
+        remote = v['remote']
+        if 'mobileNumber' in sis and 'mobileNumber' in remote:
+            if sis['mobileNumber'] != remote['mobileNumber']:
+                cadence_post_contact()

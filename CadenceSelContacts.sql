@@ -68,6 +68,7 @@ BEGIN
 	--	,@SPTermId [@SPTermId]
 	--	,@SUTermId [@SUTermId]
 	--	,@FATermId [@FATermId]
+
 	--Select list of students
 	SELECT DISTINCT PEOPLE_CODE_ID
 	INTO #Students

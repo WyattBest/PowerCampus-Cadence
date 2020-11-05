@@ -127,6 +127,7 @@ for dept in CONFIG['dept_codes']:
         r = json.loads(r.text)
         contacts[k]['remote'] = r
 
+    # Update opt-in/out status for each user
     for k, v in contacts.items():
         # If item exists on remote server
         if 'remote' in v:
@@ -144,10 +145,11 @@ for dept in CONFIG['dept_codes']:
             cadence_post_contact()
 
     # If a contact's mobileNumber changed in SIS, update Cadence and LSS
-    for k, v in contacts.items():
-        fields = ['firstName', 'lastName', 'mobileNumber']
-        sis = v['sis']
-        remote = v['remote']
-        if 'mobileNumber' in sis and 'mobileNumber' in remote:
-            if sis['mobileNumber'] != remote['mobileNumber']:
-                cadence_post_contact()
+    # for k, v in contacts.items():
+    #     fields = ['firstName', 'lastName', 'mobileNumber']
+    #     sis = v['sis']
+    #     remote = v['remote']
+    #     if 'mobileNumber' in sis and 'mobileNumber' in remote:
+    #         if sis['mobileNumber'] != remote['mobileNumber']:
+    #             cadence_post_contact()
+

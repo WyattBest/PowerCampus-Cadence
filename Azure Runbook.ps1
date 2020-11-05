@@ -17,33 +17,27 @@
 .PARAMETER SqlCredentialAsset 
     Credential asset name containing a username and password with access to the SQL Server.
 
-.PARAMETER studentId
-    PEOPLE_CODE_ID of the student.
-
-.PARAMETER departmentCode
-    Department code. Stored in TELECOMMUNICATIONS.COM_TYPE
-
-.PARAMETER optedIn
-    True/False indicating whether the student consents to SMS messaging.
+.PARAMETER WebhookData
+    Data passed in from a webhook call.
  
 .NOTES 
     AUTHOR: Wyatt Best
     LASTEDIT: 2020-11-05
 #>
 param( 
-    [parameter(Mandatory=$True)]
+    [parameter(Mandatory = $True)]
     [string] $SqlServer,
      
-    [parameter(Mandatory=$False)]
+    [parameter(Mandatory = $False)]
     [int] $SqlServerPort = 1433, 
      
-    [parameter(Mandatory=$True)]
+    [parameter(Mandatory = $True)]
     [string] $Database,
      
-    [parameter(Mandatory=$True)]
+    [parameter(Mandatory = $True)]
     [string] $SqlCredentialAsset,
 
-    [parameter(Mandatory=$False)]
+    [parameter(Mandatory = $False)]
     [object] $WebhookData
 ) 
 
@@ -58,8 +52,7 @@ $optedIn = $PostData.optedIn
 Write-Output "Preparing to set opt-in status for $studentId in department $departmentCode to $optedIn."
 
 $SqlCredential = Get-AutomationPSCredential -Name $SqlCredentialAsset 
-if ($SqlCredential -eq $null) 
-{ 
+if ($null -eq $SqlCredential) { 
     throw "Could not retrieve '$SqlCredentialAsset' credential asset. Check that you created this first in the Automation service." 
 }   
 # Get the username and password from the SQL Credential 
@@ -71,12 +64,12 @@ $Conn = New-Object System.Data.SqlClient.SqlConnection("Server=tcp:$SqlServer,$S
 $Conn.Open()
 
 # Define the SQL command to run
-$Cmd=new-object system.Data.SqlClient.SqlCommand("[custom].[CadenceUpdateSMSOpt] $studentId, $departmentCode, $optedIn, 'Cadence'", $Conn)
-$Cmd.CommandTimeout=30
+$Cmd = new-object system.Data.SqlClient.SqlCommand("[custom].[CadenceUpdateSMSOpt] $studentId, $departmentCode, $optedIn, 'Cadence'", $Conn)
+$Cmd.CommandTimeout = 30
 
 # Execute the SQL command
-$Ds=New-Object system.Data.DataSet
-$Da=New-Object system.Data.SqlClient.SqlDataAdapter($Cmd)
+$Ds = New-Object system.Data.DataSet
+$Da = New-Object system.Data.SqlClient.SqlDataAdapter($Cmd)
 [void]$Da.fill($Ds)
  
 # Output the count

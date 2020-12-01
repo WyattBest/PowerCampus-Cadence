@@ -125,3 +125,4 @@ dmypy.json
 .pyre/
 config_dev.json
 .vscode/settings.json
+scrapbook.py

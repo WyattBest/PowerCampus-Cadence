@@ -55,15 +55,28 @@ def pc_get_sms(pcid, dept):
         return None
 
 
-def pc_get_students():
-    '''Return a list of students.'''
-    sis_contacts = []
-    CURSOR.execute('exec Campus6.[custom].[CadenceSelContacts]')
+def pc_get_contacts(dept):
+    '''Execute SQL stored procedure according to department code and return a list of contacts.'''
+    contacts = []
+    contacts_sproc = CONFIG['departments'][dept]['contacts_sproc']
+
+    CURSOR.execute('exec ' + contacts_sproc)
     columns = [column[0] for column in CURSOR.description]
     for row in CURSOR.fetchall():
-        sis_contacts.append(dict(zip(columns, row)))
+        contacts.append(dict(zip(columns, row)))
 
-    return sis_contacts
+    return contacts
+
+
+def pc_get_contact(pcid):
+    contact = []
+
+    CURSOR.execute('exec [Campus6].[custom].[CadenceSelContact] ?', pcid)
+    columns = [column[0] for column in CURSOR.description]
+    for row in CURSOR.fetchall():
+        contact.append(dict(zip(columns, row)))
+
+    return contact[0]
 
 
 def pc_get_last_sync_state(dept):
@@ -77,9 +90,28 @@ def pc_get_last_sync_state(dept):
     return contacts
 
 
-def cadence_post_contact():
-    '''Create/update contact in Cadence and update local sync state table.'''
+def cadence_get_contact(mobile):
+    '''Get a contact from the Cadence API. Returns None of not found.'''
+    try:
+        r = HTTP_SESSION.get(api_url + '/v2/contacts/SS/' + mobile)
+        r.raise_for_status()
+        r = json.loads(r.text)
+        return r
+    except requests.HTTPError:
+        # We can ignore 404 errors
+        if r.status_code != 404:
+            raise
+
     return None
+
+
+def cadence_post_contacts(dept, import_batch):
+    '''Create/update contact in Cadence and update local sync state table.'''
+    r = HTTP_SESSION.post(api_url + '/v2/contacts/' +
+                          dept + '/import', data=import_batch)
+    r.raise_for_status()
+
+    return r.status_code
 
 
 with open('config_dev.json') as file:
@@ -97,12 +129,11 @@ CNXN = pyodbc.connect(CONFIG['pc_database_string'])
 CURSOR = CNXN.cursor()
 print(CNXN.getinfo(pyodbc.SQL_DATABASE_NAME))  # Print a test of connection
 
-# Fetch students from PowerCampus and nest it inside a dict
-# {'P000000000': {'sis': {'foo':'bar'}}}
-contacts = {}
-contacts = {k['PEOPLE_CODE_ID']: {'sis': k} for k in pc_get_students()}
-
-for dept in CONFIG['dept_codes']:
+for dept in CONFIG['departments']:
+    # Fetch students from PowerCampus and nest inside sis dict
+    # {'P000000000': {'sis': {'foo':'bar'}}}
+    contacts = {}
+    contacts = {k['PEOPLE_CODE_ID']: {'sis': k} for k in pc_get_contacts(dept)}
 
     # Add last sync state dict inside existing contacts dict
     # {'P000000000': {'lss': {'foo':'bar'}, 'sis': {'foo':'bar'}}}
@@ -116,40 +147,49 @@ for dept in CONFIG['dept_codes']:
     # Fetch each local contact from Cadence and add to dict with PCID as key
     # {'P000000000': {'remote': {'foo':'bar'}, 'sis': {'foo':'bar'}, ...}}
     for k, v in contacts.items():
-        if 'MobileNumber' in v['lss']:
-            mobile = v['lss']['MobileNumber']
-        else:
+        if 'lss' in v and 'MobileNumber' in v['lss']:
+            mobile = v['lss']['mobileNumber']
+        elif 'sis' in v:
             # Might as well see if any SIS contacts were manually added at remote end
-            mobile = v['sis']['MobileNumber']
+            mobile = v['sis']['mobileNumber']
 
-        r = HTTP_SESSION.get(api_url + '/v2/contacts/SS/' + mobile)
-        r.raise_for_status()
-        r = json.loads(r.text)
-        contacts[k]['remote'] = r
+        if mobile:
+            remote = cadence_get_contact(mobile)
+            if remote:
+                contacts[k]['remote'] = remote
 
-    # Update opt-in/out status for each user
+    # Build a new state for each contact
+    # {'P000000000': {'ns': {'firstName': 'Foo', 'customFields': {'foo': 'bar'}},'lss': ...}}
     for k, v in contacts.items():
-        # If item exists on remote server
+        # Get first/last names and mobile numbers from SIS
+        base_fields = ['mobileNumber',
+                       'uniqueCampusId',
+                       'firstName',
+                       'lastName',
+                       'optedOut']
+        if 'sis' in v:
+            contacts[k]['ns'] = {
+                kk: vv for (kk, vv) in v['sis'].items() if kk in base_fields}
+            contacts[k]['ns']['custom_fields'] = {
+                kk: v['sis'][kk] if kk in v['sis'] else None for kk in CONFIG['departments'][dept]['custom_fields']}
+        else:
+            # If contact not returned in bulk SIS query
+            contact = pc_get_contact(k)
+            contacts[k]['ns'] = {k: v for (k, v) in contact.items()}
+
+        # Update opt-in/out status for each user that exists on remote
         if 'remote' in v:
             optin_local = pc_get_sms(k, dept)
             opt_newstate = eval_sync_state(
                 optin_local, not v['remote']['optedOut'], not v['lss']['optedOut'])
-            print(optin_local, not v['remote']
-                  ['optedOut'], not v['lss']['optedOut'])
-            print(opt_newstate)
-            print('----')
+            # Do something more with opt states?
+            contacts[k]['ns']['optedOut'] = opt_newstate[0][0]
 
-    # Find new items to put into Cadence
-    for k, v in contacts.items():
-        if 'remote' not in v:
-            cadence_post_contact()
+        # Copy custom fields from sis state or set to None if not exists
 
-    # If a contact's mobileNumber changed in SIS, update Cadence and LSS
-    # for k, v in contacts.items():
-    #     fields = ['firstName', 'lastName', 'mobileNumber']
-    #     sis = v['sis']
-    #     remote = v['remote']
-    #     if 'mobileNumber' in sis and 'mobileNumber' in remote:
-    #         if sis['mobileNumber'] != remote['mobileNumber']:
-    #             cadence_post_contact()
+    # Send desired state to Cadence
+    # https://api.mongooseresearch.com/docs/#operation/Import
+    import_batch = {'notificationEmail': CONFIG['notification_email']}
+    import_batch['contacts'] = [v['ns'] for k, v in contacts.items()]
 
+    cadence_post_contacts(dept, import_batch)

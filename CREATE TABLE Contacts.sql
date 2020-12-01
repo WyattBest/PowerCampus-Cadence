@@ -13,7 +13,7 @@ DROP TABLE [cadence].[Contacts]
 CREATE TABLE [cadence].[Contacts] (
 	[id] [uniqueidentifier] NOT NULL
 	,[PEOPLE_CODE_ID] [nvarchar](10) NULL
-	,[MobileNumber] [varchar](11) NOT NULL CHECK (cast([MobileNumber] AS BIGINT) BETWEEN 10000000000 AND 99999999999)
+	,[mobileNumber] [varchar](11) NOT NULL CHECK (cast([mobileNumber] AS BIGINT) BETWEEN 10000000000 AND 99999999999)
 	,[CreateDatetime] [datetime] NOT NULL
 	,[UpdateDatetime] [datetime] NOT NULL
 	,[DepartmentCode] [nvarchar](10) NOT NULL

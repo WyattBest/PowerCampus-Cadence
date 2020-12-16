@@ -90,6 +90,11 @@ def pc_get_last_sync_state(dept):
     return contacts
 
 
+def pc_update_opt():
+    '''Stub. Intended to update Telecommunications.'''
+    return
+
+
 def cadence_get_contact(mobile):
     '''Get a contact from the Cadence API. Returns None of not found.'''
     try:
@@ -108,7 +113,7 @@ def cadence_get_contact(mobile):
 def cadence_post_contacts(dept, import_batch):
     '''Create/update contact in Cadence and update local sync state table.'''
     r = HTTP_SESSION.post(api_url + '/v2/contacts/' +
-                          dept + '/import', data=import_batch)
+                          dept + '/import', json=import_batch)
     r.raise_for_status()
 
     return r.status_code
@@ -133,30 +138,30 @@ for dept in CONFIG['departments']:
     # Fetch students from PowerCampus and nest inside sis dict
     # {'P000000000': {'sis': {'foo':'bar'}}}
     contacts = {}
-    contacts = {k['PEOPLE_CODE_ID']: {'sis': k} for k in pc_get_contacts(dept)}
+    contacts = {k['uniqueCampusId']: {'sis': k} for k in pc_get_contacts(dept)}
 
     # Add last sync state dict inside existing contacts dict
     # {'P000000000': {'lss': {'foo':'bar'}, 'sis': {'foo':'bar'}}}
     for k in pc_get_last_sync_state(dept):
-        if k['PEOPLE_CODE_ID'] in contacts:
-            contacts[k['PEOPLE_CODE_ID']]['lss'] = k
+        if k['uniqueCampusId'] in contacts:
+            contacts[k['uniqueCampusId']]['lss'] = k
         else:
-            contacts.update({k['PEOPLE_CODE_ID']: {'lss': k}})
+            contacts.update({k['uniqueCampusId']: {'lss': k}})
 
     # Add remote state dict inside existing contacts dict
     # Fetch each local contact from Cadence and add to dict with PCID as key
     # {'P000000000': {'remote': {'foo':'bar'}, 'sis': {'foo':'bar'}, ...}}
-    for k, v in contacts.items():
-        if 'lss' in v and 'MobileNumber' in v['lss']:
-            mobile = v['lss']['mobileNumber']
-        elif 'sis' in v:
-            # Might as well see if any SIS contacts were manually added at remote end
-            mobile = v['sis']['mobileNumber']
+    # for k, v in contacts.items():
+    #     if 'lss' in v and 'MobileNumber' in v['lss']:
+    #         mobile = v['lss']['mobileNumber']
+    #     elif 'sis' in v:
+    #         # Might as well see if any SIS contacts were manually added at remote end
+    #         mobile = v['sis']['mobileNumber']
 
-        if mobile:
-            remote = cadence_get_contact(mobile)
-            if remote:
-                contacts[k]['remote'] = remote
+    #     if mobile:
+    #         remote = cadence_get_contact(mobile)
+    #         if remote:
+    #             contacts[k]['remote'] = remote
 
     # Build a new state for each contact
     # {'P000000000': {'ns': {'firstName': 'Foo', 'customFields': {'foo': 'bar'}},'lss': ...}}
@@ -170,26 +175,36 @@ for dept in CONFIG['departments']:
         if 'sis' in v:
             contacts[k]['ns'] = {
                 kk: vv for (kk, vv) in v['sis'].items() if kk in base_fields}
+            # Copy custom fields from sis state or set to None if not exists
             contacts[k]['ns']['custom_fields'] = {
-                kk: v['sis'][kk] if kk in v['sis'] else None for kk in CONFIG['departments'][dept]['custom_fields']}
+                kk: v['sis'][kk] if kk in v['sis'] else vv for kk, vv in CONFIG['departments'][dept]['custom_fields'].items()}
         else:
-            # If contact not returned in bulk SIS query
+            # If contact not returned in bulk SIS query, get individual records and set custom fields to None (old, unenrolled students)
             contact = pc_get_contact(k)
             contacts[k]['ns'] = {k: v for (k, v) in contact.items()}
+            contacts[k]['ns']['custom_fields'] = {
+                kk: vv for kk, vv in CONFIG['departments'][dept]['custom_fields'].items()}
 
-        # Update opt-in/out status for each user that exists on remote
-        if 'remote' in v:
-            optin_local = pc_get_sms(k, dept)
-            opt_newstate = eval_sync_state(
-                optin_local, not v['remote']['optedOut'], not v['lss']['optedOut'])
-            # Do something more with opt states?
-            contacts[k]['ns']['optedOut'] = opt_newstate[0][0]
-
-        # Copy custom fields from sis state or set to None if not exists
+        # Update opt-in/out status for each user that exists on remote.
+        # Example: ((False, True), (False, False), (False, True))
+        # ...user opted out in Cadence. SIS and LSS need to be changed.
+        # if 'remote' in v:
+        #     optin_local = pc_get_sms(k, dept)
+        #     # Cadence considers True = Opt Out. We will use PowerCampus method, True = Opt In.
+        #     opt_newstate = eval_sync_state(
+        #         optin_local, not v['remote']['optedOut'], not v['lss']['optedOut'])
+        #     # Store new state
+        #     contacts[k]['ns']['optedOut'] = opt_newstate[0][0]
+        #     # Update PowerCampus if necessary.
+        #     if opt_newstate[0][1]:
+        #         pc_update_opt()
 
     # Send desired state to Cadence
     # https://api.mongooseresearch.com/docs/#operation/Import
     import_batch = {'notificationEmail': CONFIG['notification_email']}
-    import_batch['contacts'] = [v['ns'] for k, v in contacts.items()]
+    import_batch['contacts'] = [v['ns']
+                                for k, v in contacts.items() if v['ns']['mobileNumber'] is not None]
+    for contact in import_batch['contacts']:
+        contact['allowMobileUpdate'] = 1
 
     cadence_post_contacts(dept, import_batch)

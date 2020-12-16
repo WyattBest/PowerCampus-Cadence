@@ -1,7 +1,7 @@
 USE [Campus6_suppMCNY]
 GO
 
-/****** Object:  StoredProcedure [cadence].[selLastSyncState]    Script Date: 2020-10-23 14:48:29 ******/
+/****** Object:  StoredProcedure [cadence].[selLastSyncState]    Script Date: 2020-12-15 16:57:00 ******/
 SET ANSI_NULLS ON
 GO
 
@@ -25,9 +25,9 @@ BEGIN
 	--	,'SYSTEM\CurrentControlSet\Control\TimeZoneInformation'
 	--	,'TimeZoneKeyName'
 	--	,@TimeZone OUT
-	SELECT [id]
-		,[PEOPLE_CODE_ID]
-		,[MobileNumber]
+	SELECT TOP 10 [id] --Debug
+		,[PEOPLE_CODE_ID] [uniqueCampusId]
+		,[mobileNumber]
 		,[CreateDatetime]
 		--,format(CONVERT(DATETIME, [CreateDatetime] AT TIME ZONE @TimeZone AT TIME ZONE 'UTC'), 'yyyy-MM-ddTHH:mm:ssZ') [CreateDatetime]
 		--,format(CONVERT(DATETIME, [UpdateDatetime] AT TIME ZONE @TimeZone AT TIME ZONE 'UTC'), 'yyyy-MM-ddTHH:mm:ssZ') [UpdateDatetime]
@@ -35,6 +35,8 @@ BEGIN
 		,[optedOut]
 	FROM [Contacts]
 	WHERE DepartmentCode = @dept
+		AND PEOPLE_CODE_ID IS NOT NULL
+	ORDER BY PEOPLE_CODE_ID --Debug
 END
 GO
 

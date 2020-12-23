@@ -1,20 +1,17 @@
 USE [Campus6_suppMCNY]
 GO
 
-/****** Object:  Table [cadence].[Contacts]    Script Date: 2020-10-21 14:54:29 ******/
+/****** Object:  Table [cadence].[LocalSyncState]    Script Date: 2020-10-21 14:54:29 ******/
 SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
-DROP TABLE [cadence].[Contacts]
-
-CREATE TABLE [cadence].[Contacts] (
+CREATE TABLE [cadence].[LocalSyncState] (
 	[id] [uniqueidentifier] NOT NULL
 	,[PEOPLE_CODE_ID] [nvarchar](10) NULL
-	,[mobileNumber] [varchar](11) NOT NULL CHECK (cast([mobileNumber] AS BIGINT) BETWEEN 10000000000 AND 99999999999)
-	,[CreateDatetime] [datetime] NOT NULL
+	,[mobileNumber] [varchar](11) NOT NULL CHECK (cast([mobileNumber] AS BIGINT) BETWEEN 10000000000 AND 19999999999)
 	,[UpdateDatetime] [datetime] NOT NULL
 	,[DepartmentCode] [nvarchar](10) NOT NULL
 	,[optedOut] [bit] NOT NULL
@@ -29,16 +26,10 @@ CREATE TABLE [cadence].[Contacts] (
 	) ON [PRIMARY]
 GO
 
-ALTER TABLE [cadence].[Contacts] ADD DEFAULT(newid())
+ALTER TABLE [cadence].[LocalSyncState] ADD DEFAULT(newid())
 FOR [id]
 GO
 
-ALTER TABLE [cadence].[Contacts] ADD DEFAULT(getdate())
-FOR [CreateDatetime]
-GO
-
-ALTER TABLE [cadence].[Contacts] ADD DEFAULT(getdate())
+ALTER TABLE [cadence].[LocalSyncState] ADD DEFAULT(getdate())
 FOR [UpdateDatetime]
 GO
-
-

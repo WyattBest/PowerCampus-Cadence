@@ -1,7 +1,7 @@
 USE [Campus6]
 GO
 
-/****** Object:  StoredProcedure [custom].[CadenceSelContacts]    Script Date: 2020-12-15 16:58:03 ******/
+/****** Object:  StoredProcedure [custom].[CadenceSelContacts]    Script Date: 2020-12-22 23:48:45 ******/
 SET ANSI_NULLS ON
 GO
 
@@ -14,10 +14,8 @@ GO
 -- Create date: 2020-10-23
 -- Description:	Selects three terms' worth of students and various fields to send to Mongoose Cadence.
 --
--- 2020-12-15 Wyatt Best:	Don't prepend US country code if it already exists. This represents an underlying data problem, but we can mask it here.
---							Export credits as int.
 -- =============================================
-CREATE PROCEDURE [custom].[CadenceSelContacts]
+CREATE PROCEDURE [custom].[CadenceSelContacts] @Dept NVARCHAR(2)
 AS
 BEGIN
 	SET NOCOUNT ON;
@@ -84,7 +82,7 @@ BEGIN
 		AND ACADEMIC_SESSION > ''
 
 	--Add in columns
-	SELECT TOP 10 S.PEOPLE_CODE_ID [uniqueCampusId] --Debug
+	SELECT S.PEOPLE_CODE_ID [uniqueCampusId]
 		,dbo.fnPeopleOrgName(S.PEOPLE_CODE_ID, 'FN') [firstName]
 		,dbo.fnPeopleOrgName(S.PEOPLE_CODE_ID, 'LN') [lastName]
 		,Phone.*
@@ -92,15 +90,19 @@ BEGIN
 		,try_cast(SP_Credits.CREDITS AS INT) [SP_Credits]
 		,try_cast(SU_Credits.CREDITS AS INT) [SU_Credits]
 		,try_cast(FA_Credits.CREDITS AS INT) [FA_Credits]
+		,CASE T.[STATUS]
+			WHEN 'A'
+				THEN 0
+			WHEN 'I'
+				THEN 1
+			ELSE NULL
+			END AS [optedOut]
 	FROM #Students S
 	OUTER APPLY (
 		SELECT TOP 1 CASE 
-				WHEN CountryId = 240
-					AND LEFT(PP.PhoneNumber, 1) = '1' --US country code
+				WHEN LEFT(PP.PhoneNumber, 1) = '1' --US country code already prepended
 					THEN PP.PhoneNumber
-				WHEN CountryId = 240 --US country code
-					THEN '1' + PP.PhoneNumber
-				ELSE '??'
+				ELSE '1' + PP.PhoneNumber
 				END AS [mobileNumber]
 		FROM PEOPLE P
 		INNER JOIN PersonPhone PP
@@ -108,6 +110,7 @@ BEGIN
 				AND DoNotCallReason IS NULL
 				AND PhoneType = 'MOBILE1'
 		WHERE P.PEOPLE_CODE_ID = S.PEOPLE_CODE_ID
+			AND CountryId = 240 --US numbers only
 		ORDER BY CASE 
 				WHEN P.PrimaryPhoneId = PP.PersonPhoneId
 					THEN GETDATE()
@@ -141,7 +144,9 @@ BEGIN
 		WHERE A.PEOPLE_CODE_ID = S.PEOPLE_CODE_ID
 			AND A.TermId = @FATermId
 		) AS FA_Credits
-	ORDER BY S.PEOPLE_CODE_ID --Debug
+	LEFT JOIN TELECOMMUNICATIONS T
+		ON T.PEOPLE_ORG_CODE_ID = S.PEOPLE_CODE_ID
+			AND T.COM_TYPE = 'SMS' + @Dept
 
 	DROP TABLE #Students
 END

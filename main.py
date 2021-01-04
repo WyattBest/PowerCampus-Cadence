@@ -74,6 +74,7 @@ def cadence_post_contacts(dept, import_batch):
     # Append response to JSON file in case we want to check batches later
     with open('import_batches.json', mode='a') as file:
         json.dump(r.text, file)
+        file.write('\n')
 
     if CONFIG['debug']:
         # Dump entire request to JSON file
@@ -92,7 +93,7 @@ def cadence_post_contacts(dept, import_batch):
 
         with open(filename, mode='w') as file:
             json.dump(debug, file, indent=4)
-            file.write('\n')
+            
 
     return r.status_code
 

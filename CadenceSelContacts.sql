@@ -1,7 +1,7 @@
 USE [Campus6]
 GO
 
-/****** Object:  StoredProcedure [custom].[CadenceSelContacts]    Script Date: 2020-12-22 23:48:45 ******/
+/****** Object:  StoredProcedure [custom].[CadenceSelContacts]    Script Date: 2021-01-04 10:05:34 ******/
 SET ANSI_NULLS ON
 GO
 
@@ -14,6 +14,7 @@ GO
 -- Create date: 2020-10-23
 -- Description:	Selects three terms' worth of students and various fields to send to Mongoose Cadence.
 --
+-- 2021-01-04 Wyatt Best: Issue #1: Don't return students with no optedOut state (TELECOMMUNICATIONS record for dept)
 -- =============================================
 CREATE PROCEDURE [custom].[CadenceSelContacts] @Dept NVARCHAR(2)
 AS
@@ -64,11 +65,6 @@ BEGIN
 	FROM [custom].vwOrderedTerms OT
 	WHERE TermId = @TermId
 
-	----Debug
-	--SELECT @TermId [@TermId]
-	--	,@SPTermId [@SPTermId]
-	--	,@SUTermId [@SUTermId]
-	--	,@FATermId [@FATermId]
 	--Select list of students
 	SELECT DISTINCT PEOPLE_CODE_ID
 	INTO #Students
@@ -144,7 +140,7 @@ BEGIN
 		WHERE A.PEOPLE_CODE_ID = S.PEOPLE_CODE_ID
 			AND A.TermId = @FATermId
 		) AS FA_Credits
-	LEFT JOIN TELECOMMUNICATIONS T
+	INNER JOIN TELECOMMUNICATIONS T
 		ON T.PEOPLE_ORG_CODE_ID = S.PEOPLE_CODE_ID
 			AND T.COM_TYPE = 'SMS' + @Dept
 

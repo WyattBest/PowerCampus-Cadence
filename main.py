@@ -121,7 +121,7 @@ for dept in CONFIG['departments']:
         else:
             contacts.update({k['uniqueCampusId']: {'lss': k}})
 
-    # Build a new state for each contact
+    # Build a new state for each contact who has an optedOut state
     # {'P000000000': {'ns': {'firstName': 'Foo', 'customFields': {'foo': 'bar'}},'lss': ...}}
     for k, v in contacts.items():
         # Get first/last names and mobile numbers from SIS
@@ -130,7 +130,7 @@ for dept in CONFIG['departments']:
                        'firstName',
                        'lastName',
                        'optedOut']
-        if 'sis' in v:
+        if 'sis' in v and v['sis']['optedOut'] is not None:
             contacts[k]['ns'] = {
                 kk: vv for (kk, vv) in v['sis'].items() if kk in base_fields}
             # Copy custom fields from sis state or set to None if not exists
@@ -147,7 +147,7 @@ for dept in CONFIG['departments']:
     # https://api.mongooseresearch.com/docs/#operation/Import
     import_batch = {'notificationEmail': CONFIG['notification_email']}
     import_batch['contacts'] = [v['ns']
-                                for k, v in contacts.items() if v['ns']['mobileNumber'] is not None]
+                                for k, v in contacts.items() if 'ns' in v and v['ns']['mobileNumber'] is not None]
     for contact in import_batch['contacts']:
         contact['allowMobileUpdate'] = 1
 

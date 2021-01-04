@@ -71,6 +71,29 @@ def cadence_post_contacts(dept, import_batch):
                           dept + '/import', json=import_batch)
     r.raise_for_status()
 
+    # Append response to JSON file in case we want to check batches later
+    with open('import_batches.json', mode='a') as file:
+        json.dump(r.text, file)
+
+    if CONFIG['debug']:
+        # Dump entire request to JSON file
+        debug = {'url': r.request.url,
+                 'method': r.request.method,
+                 'headers': dict(r.request.headers),
+                 'body': json.loads(r.request.body),
+                 'status_code': r.status_code,
+                 'text': r.text
+                 }
+        try:
+            filename = 'batch_' + \
+                json.loads(r.text)['batchIdentifier'] + '.json'
+        except:
+            filename = 'request.json'
+
+        with open(filename, mode='w') as file:
+            json.dump(debug, file, indent=4)
+            file.write('\n')
+
     return r.status_code
 
 

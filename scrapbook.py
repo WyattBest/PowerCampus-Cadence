@@ -79,16 +79,7 @@ def eval_sync_state(local, remote, sync):
     return result
 
 
-# Dump request to JSON for debugging
-debug = {'url': r.request.url,
-         'method': r.request.method,
-         'headers': dict(r.request.headers),
-         'body': json.loads(r.request.body),
-         'status_code': r.status_code,
-         'text': r.text
-         }
-with open('request.json', mode='w') as file:
-    json.dump(debug, file, indent=4)
+
 
 
 def pc_get_sms(pcid, dept):

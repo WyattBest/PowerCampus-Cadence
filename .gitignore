@@ -124,7 +124,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
 config_dev.json
 .vscode/settings.json
 import_batches.json
 request.json
+batch_*.json

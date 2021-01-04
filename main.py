@@ -86,7 +86,7 @@ def cadence_post_contacts(dept, import_batch):
                  }
         try:
             filename = 'batch_' + \
-                json.loads(r.text)['batchIdentifier'] + '.json'
+                str(json.loads(r.text)['batchIdentifier']) + '.json'
         except:
             filename = 'request.json'
 

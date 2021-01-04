@@ -103,3 +103,25 @@ def pc_get_sms(pcid, dept):
         return status_mapping[status]
     else:
         return None
+
+
+# TEMP: Delete contacts from Cadence who shouldn't have been uploaded to begin with
+        if contact['optedOut'] is None:
+            r = HTTP_SESSION.delete(api_url+'/v2/contacts/' +
+                                    dept + '/' + contact['mobileNumber'])
+            r.raise_for_status()
+
+
+def cadence_get_contact(mobile):
+    '''Get a contact from the Cadence API. Returns None of not found.'''
+    try:
+        r = HTTP_SESSION.get(api_url + '/v2/contacts/SS/' + mobile)
+        r.raise_for_status()
+        r = json.loads(r.text)
+        return r
+    except requests.HTTPError:
+        # We can ignore 404 errors
+        if r.status_code != 404:
+            raise
+
+    return None

@@ -40,17 +40,14 @@ def pc_get_last_sync_state(dept):
     return contacts
 
 
-def pc_update_last_sync_state(dept, contacts):
-    # Isolate data we want to insert
+def pc_update_last_sync_state(dept, import_batch):
+    # Isolate data we want to insert and add dept code
     columns = ['uniqueCampusId', 'mobileNumber', 'DepartmentCode', 'optedOut']
     data = []
-    for c in contacts:
-        if 'ns' in contacts[c] and contacts[c]['ns']['mobileNumber'] is not None:
-            # Insert department code
-            contacts[c]['ns']['DepartmentCode'] = dept
-            # Append tuple to list
-            data.append(
-                tuple([v for (k, v) in contacts[c]['ns'].items() if k in columns]))
+    for contact in import_batch['contacts']:
+        contact['DepartmentCode'] = dept
+        data.append(
+            tuple([v for (k, v) in contact.items() if k in columns]))
 
     # Delete existing dept records
     CURSOR.execute(
@@ -65,21 +62,6 @@ def pc_update_last_sync_state(dept, contacts):
         )
     VALUES (?, ?, ?, ?)'''
     CURSOR.executemany(sql, data)
-
-
-def cadence_get_contact(mobile):
-    '''Get a contact from the Cadence API. Returns None of not found.'''
-    try:
-        r = HTTP_SESSION.get(api_url + '/v2/contacts/SS/' + mobile)
-        r.raise_for_status()
-        r = json.loads(r.text)
-        return r
-    except requests.HTTPError:
-        # We can ignore 404 errors
-        if r.status_code != 404:
-            raise
-
-    return None
 
 
 def cadence_post_contacts(dept, import_batch):
@@ -121,7 +103,7 @@ for dept in CONFIG['departments']:
         else:
             contacts.update({k['uniqueCampusId']: {'lss': k}})
 
-    # Build a new state for each contact who has an optedOut state
+    # Build a new state for each contact
     # {'P000000000': {'ns': {'firstName': 'Foo', 'customFields': {'foo': 'bar'}},'lss': ...}}
     for k, v in contacts.items():
         # Get first/last names and mobile numbers from SIS
@@ -130,7 +112,7 @@ for dept in CONFIG['departments']:
                        'firstName',
                        'lastName',
                        'optedOut']
-        if 'sis' in v and v['sis']['optedOut'] is not None:
+        if 'sis' in v:
             contacts[k]['ns'] = {
                 kk: vv for (kk, vv) in v['sis'].items() if kk in base_fields}
             # Copy custom fields from sis state or set to None if not exists
@@ -143,17 +125,17 @@ for dept in CONFIG['departments']:
             contacts[k]['ns']['customFields'] = {
                 kk: vv for kk, vv in CONFIG['departments'][dept]['custom_fields'].items()}
 
-    # Send desired state to Cadence
+    # Send desired state to Cadence for each contact who has a mobileNumber and an optOut state
     # https://api.mongooseresearch.com/docs/#operation/Import
     import_batch = {'notificationEmail': CONFIG['notification_email']}
-    import_batch['contacts'] = [v['ns']
-                                for k, v in contacts.items() if 'ns' in v and v['ns']['mobileNumber'] is not None]
+    import_batch['contacts'] = [v['ns'] for k, v in contacts.items(
+    ) if 'ns' in v and v['ns']['mobileNumber'] is not None and v['ns']['optedOut'] is not None]
     for contact in import_batch['contacts']:
         contact['allowMobileUpdate'] = 1
 
     # Update local sync state but do not commit SQL transaction.
     # Update remote state (Cadence). If successful, commit tran.
     # This can be improved by explicitly passing a connection around instead of depending on a global.
-    pc_update_last_sync_state(dept, contacts)
+    pc_update_last_sync_state(dept, import_batch)
     if cadence_post_contacts(dept, import_batch) == 200:
         CURSOR.commit()

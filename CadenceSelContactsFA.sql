@@ -1,7 +1,7 @@
 USE [Campus6]
 GO
 
-/****** Object:  StoredProcedure [custom].[CadenceSelContacts]    Script Date: 2021-01-05 14:56:33 ******/
+/****** Object:  StoredProcedure [custom].[CadenceSelContactsFA]    Script Date: 2021-01-05 14:56:52 ******/
 SET ANSI_NULLS ON
 GO
 
@@ -13,8 +13,10 @@ GO
 -- Author:		Wyatt Best
 -- Create date: 2020-10-23
 -- Description:	Selects three terms' worth of students and various fields to send to Mongoose Cadence.
+--
+-- 2021-01-04 Wyatt Best:	Forked from custom.CadenceSelContacts because Financial Aid communicates with applicants.
 -- =============================================
-CREATE PROCEDURE [custom].[CadenceSelContacts] @Dept NVARCHAR(2)
+CREATE PROCEDURE [custom].[CadenceSelContactsFA] @Dept NVARCHAR(2)
 AS
 BEGIN
 	SET NOCOUNT ON;
@@ -68,10 +70,15 @@ BEGIN
 	INTO #Students
 	FROM [custom].vwACADEMIC A
 	WHERE TermId BETWEEN @TermId - 1 AND @TermId + 2
-		AND ACADEMIC_FLAG = 'Y'
-		AND [STATUS] IN (
-			'A'
-			,'G'
+		AND (
+			(
+				ACADEMIC_FLAG = 'Y'
+				AND [STATUS] IN (
+					'A'
+					,'G'
+					)
+				)
+			OR APPLICATION_FLAG = 'Y'
 			)
 		AND ACADEMIC_SESSION > ''
 
@@ -80,7 +87,14 @@ BEGIN
 		,dbo.fnPeopleOrgName(S.PEOPLE_CODE_ID, 'FN') [firstName]
 		,dbo.fnPeopleOrgName(S.PEOPLE_CODE_ID, 'LN') [lastName]
 		,Phone.*
-		,Enrollment.SHORT_DESC [Enrollment]
+		--,CASE 
+		--	WHEN Enrollment.ACADEMIC_FLAG = 'Y'
+		--		THEN Enrollment.EnrollmentDesc
+		--	ELSE Enrollment.AppDecisionDesc
+		--	END [Enrollment]
+		,Enrollment.Enrollment
+		,Enrollment.AppDecision
+		,Enrollment.LatestTerm
 		,try_cast(SP_Credits.CREDITS AS INT) [SP_Credits]
 		,try_cast(SU_Credits.CREDITS AS INT) [SU_Credits]
 		,try_cast(FA_Credits.CREDITS AS INT) [FA_Credits]
@@ -112,13 +126,18 @@ BEGIN
 				END DESC
 		) AS Phone
 	OUTER APPLY (
-		SELECT TOP 1 SHORT_DESC
+		SELECT TOP 1 CE.SHORT_DESC [Enrollment]
+			,ACADEMIC_FLAG
+			,CAD.MEDIUM_DESC [AppDecision]
+			,ACADEMIC_YEAR + ' ' + ACADEMIC_TERM [LatestTerm]
 		FROM [custom].vwACADEMIC A
-		INNER JOIN CODE_ENROLLMENT
+		LEFT JOIN CODE_ENROLLMENT CE
 			ON CODE_VALUE_KEY = ENROLL_SEPARATION
+		LEFT JOIN CODE_APPDECISION CAD
+			ON CAD.CODE_VALUE_KEY = APP_DECISION
 		WHERE A.PEOPLE_CODE_ID = S.PEOPLE_CODE_ID
 			AND TermId BETWEEN @TermId - 1 AND @TermId + 2
-		ORDER BY A.TERMID DESC
+		ORDER BY A.TermId DESC
 		) Enrollment
 	OUTER APPLY (
 		SELECT COALESCE(SUM(CREDITS), 0) [CREDITS]

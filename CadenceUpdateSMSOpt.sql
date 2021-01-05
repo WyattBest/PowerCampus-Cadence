@@ -1,19 +1,20 @@
 USE [Campus6]
 GO
 
-/****** Object:  StoredProcedure [custom].[CadenceUpdateSMSOpt]    Script Date: 2020-11-05 14:58:34 ******/
+/****** Object:  StoredProcedure [custom].[CadenceUpdateSMSOpt]    Script Date: 2021-01-05 14:57:08 ******/
 SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
+
 -- =============================================
 -- Author:		Wyatt Best
 -- Create date: 2020-11-04
 -- Description:	Updates a SMS Opt-In row.
 -- =============================================
-ALTER PROCEDURE [custom].[CadenceUpdateSMSOpt] @PCID NVARCHAR(10)
+CREATE PROCEDURE [custom].[CadenceUpdateSMSOpt] @PCID NVARCHAR(10)
 	,@Dept NVARCHAR(10)
 	,@OptedIn BIT
 	,@OPID NVARCHAR(8)
@@ -42,3 +43,5 @@ BEGIN
 
 	SELECT @@ROWCOUNT
 END
+GO
+

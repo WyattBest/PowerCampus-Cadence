@@ -130,3 +130,4 @@ config_dev.json
 import_batches.json
 request.json
 batch_*.json
+GRANT EXECUTE.sql

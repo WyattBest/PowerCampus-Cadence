@@ -26,7 +26,10 @@ def pc_get_contact(pcid, dept):
     for row in CURSOR.fetchall():
         contact.append(dict(zip(columns, row)))
 
-    return contact[0]
+    if len(contact) > 0:
+        return contact[0]
+    else:
+        return None
 
 
 def pc_get_last_sync_state(dept):
@@ -93,7 +96,6 @@ def cadence_post_contacts(dept, import_batch):
 
         with open(filename, mode='w') as file:
             json.dump(debug, file, indent=4)
-            
 
     return r.status_code
 
@@ -145,9 +147,10 @@ for dept in CONFIG['departments']:
         else:
             # If contact not returned in bulk SIS query, get individual records and set custom fields to None (old, unenrolled students)
             contact = pc_get_contact(k, dept)
-            contacts[k]['ns'] = {k: v for (k, v) in contact.items()}
-            contacts[k]['ns']['customFields'] = {
-                kk: vv for kk, vv in CONFIG['departments'][dept]['custom_fields'].items()}
+            if contact:
+                contacts[k]['ns'] = {k: v for (k, v) in contact.items()}
+                contacts[k]['ns']['customFields'] = {
+                    kk: vv for kk, vv in CONFIG['departments'][dept]['custom_fields'].items()}
 
     # Send desired state to Cadence for each contact who has a mobileNumber and an optOut state
     # https://api.mongooseresearch.com/docs/#operation/Import

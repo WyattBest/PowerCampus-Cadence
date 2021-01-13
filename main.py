@@ -137,6 +137,7 @@ for dept in CONFIG['departments']:
                        'uniqueCampusId',
                        'firstName',
                        'lastName',
+                       'staffId',
                        'optedOut']
         if 'sis' in v:
             contacts[k]['ns'] = {

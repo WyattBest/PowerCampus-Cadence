@@ -25,5 +25,13 @@
                 "AppDecision": ""
             }
         }
+    },
+    "smtp": {
+        "subject": "PowerCampus-Cadence Error",
+        "from": "sender@mcny.edu",
+        "to": "recipient@mcny.edu",
+        "server": "smtp.office365.com",
+        "username": "sender@mcny.edu",
+        "password": "astrongpassword"
     }
 }

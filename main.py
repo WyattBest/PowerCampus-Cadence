@@ -4,6 +4,29 @@ import json
 import pyodbc
 
 
+def init_config(config_path):
+    """Reads config file to global 'config' dict. Frequently-used variables are copied to their own globals for convenince."""
+    global CONFIG
+    global CURSOR
+    global API_URL
+    global HTTP_SESSION
+
+    with open(config_path) as file:
+        CONFIG = json.load(file)
+
+    API_URL = CONFIG['api_url']
+    api_key = CONFIG['api_key']
+    api_secret = CONFIG['api_secret']
+    HTTP_SESSION = requests.Session()
+    HTTP_SESSION.auth = (api_key, api_secret)
+
+    # Microsoft SQL Server connection.
+    CNXN = pyodbc.connect(CONFIG['pc_database_string'])
+    CURSOR = CNXN.cursor()
+    CURSOR.fast_executemany = True
+    print(CNXN.getinfo(pyodbc.SQL_DATABASE_NAME))  # Print a test of connection
+
+
 def pc_get_contacts(dept):
     '''Execute SQL stored procedure according to department code and return a list of contacts.'''
     contacts = []
@@ -45,7 +68,8 @@ def pc_get_last_sync_state(dept):
 
 def pc_update_last_sync_state(dept, import_batch):
     # Isolate data we want to insert and add dept code
-    columns = ['uniqueCampusId', 'mobileNumber', 'DepartmentCode', 'optedOut']
+    columns = ['uniqueCampusId', 'mobileNumber',
+               'DepartmentCode', 'optedOut']
     data = []
     for contact in import_batch['contacts']:
         contact['DepartmentCode'] = dept
@@ -70,7 +94,7 @@ def pc_update_last_sync_state(dept, import_batch):
 def cadence_post_contacts(dept, import_batch):
     '''Create/update contact in Cadence.'''
 
-    r = HTTP_SESSION.post(api_url + '/v2/contacts/' +
+    r = HTTP_SESSION.post(API_URL + '/v2/contacts/' +
                           dept + '/import', json=import_batch)
     r.raise_for_status()
 
@@ -100,75 +124,64 @@ def cadence_post_contacts(dept, import_batch):
     return r.status_code
 
 
-with open('config_dev.json') as file:
-    CONFIG = json.load(file)
+def main_sync():
+    """Main body of the program."""
 
-api_url = CONFIG['api_url']
-api_key = CONFIG['api_key']
-api_secret = CONFIG['api_secret']
-HTTP_SESSION = requests.Session()
-HTTP_SESSION.auth = (api_key, api_secret)
+    for dept in CONFIG['departments']:
+        # Fetch students from PowerCampus and nest inside sis dict
+        # {'P000000000': {'sis': {'foo':'bar'}}}
+        contacts = {}
+        contacts = {k['uniqueCampusId']: {'sis': k}
+                    for k in pc_get_contacts(dept)}
 
-# Microsoft SQL Server connection.
-CNXN = pyodbc.connect(CONFIG['pc_database_string'])
-CURSOR = CNXN.cursor()
-CURSOR.fast_executemany = True
-print(CNXN.getinfo(pyodbc.SQL_DATABASE_NAME))  # Print a test of connection
+        # Add last sync state dict inside existing contacts dict
+        # {'P000000000': {'lss': {'foo':'bar'}, 'sis': {'foo':'bar'}}}
+        for k in pc_get_last_sync_state(dept):
+            if k['uniqueCampusId'] in contacts:
+                contacts[k['uniqueCampusId']]['lss'] = k
+            else:
+                contacts.update({k['uniqueCampusId']: {'lss': k}})
 
-for dept in CONFIG['departments']:
-    # Fetch students from PowerCampus and nest inside sis dict
-    # {'P000000000': {'sis': {'foo':'bar'}}}
-    contacts = {}
-    contacts = {k['uniqueCampusId']: {'sis': k} for k in pc_get_contacts(dept)}
-
-    # Add last sync state dict inside existing contacts dict
-    # {'P000000000': {'lss': {'foo':'bar'}, 'sis': {'foo':'bar'}}}
-    for k in pc_get_last_sync_state(dept):
-        if k['uniqueCampusId'] in contacts:
-            contacts[k['uniqueCampusId']]['lss'] = k
-        else:
-            contacts.update({k['uniqueCampusId']: {'lss': k}})
-
-    # Build a new state for each contact
-    # {'P000000000': {'ns': {'firstName': 'Foo', 'customFields': {'foo': 'bar'}},'lss': ...}}
-    for k, v in contacts.items():
-        # Get first/last names and mobile numbers from SIS
-        base_fields = ['mobileNumber',
-                       'uniqueCampusId',
-                       'firstName',
-                       'lastName',
-                       'staffId',
-                       'optedOut']
-        if 'sis' in v:
-            contacts[k]['ns'] = {
-                kk: vv for (kk, vv) in v['sis'].items() if kk in base_fields}
-            # Copy custom fields from sis state or set to None if not exists
-            contacts[k]['ns']['customFields'] = {
-                kk: v['sis'][kk] if kk in v['sis'] else vv for kk, vv in CONFIG['departments'][dept]['custom_fields'].items()}
-        else:
-            # If contact not returned in bulk SIS query, get individual records and set custom fields to None (old, unenrolled students)
-            contact = pc_get_contact(k, dept)
-            if contact:
-                contacts[k]['ns'] = {k: v for (k, v) in contact.items()}
+        # Build a new state for each contact
+        # {'P000000000': {'ns': {'firstName': 'Foo', 'customFields': {'foo': 'bar'}},'lss': ...}}
+        for k, v in contacts.items():
+            # Get first/last names and mobile numbers from SIS
+            base_fields = ['mobileNumber',
+                           'uniqueCampusId',
+                           'firstName',
+                           'lastName',
+                           'staffId',
+                           'optedOut']
+            if 'sis' in v:
+                contacts[k]['ns'] = {
+                    kk: vv for (kk, vv) in v['sis'].items() if kk in base_fields}
+                # Copy custom fields from sis state or set to None if not exists
                 contacts[k]['ns']['customFields'] = {
-                    kk: vv for kk, vv in CONFIG['departments'][dept]['custom_fields'].items()}
+                    kk: v['sis'][kk] if kk in v['sis'] else vv for kk, vv in CONFIG['departments'][dept]['custom_fields'].items()}
+            else:
+                # If contact not returned in bulk SIS query, get individual records and set custom fields to None (old, unenrolled students)
+                contact = pc_get_contact(k, dept)
+                if contact:
+                    contacts[k]['ns'] = {k: v for (k, v) in contact.items()}
+                    contacts[k]['ns']['customFields'] = {
+                        kk: vv for kk, vv in CONFIG['departments'][dept]['custom_fields'].items()}
 
-    # Send desired state to Cadence for each contact who has a mobileNumber and an optOut state
-    # https://api.mongooseresearch.com/docs/#operation/Import
-    import_batch = {'notificationEmail': CONFIG['notification_email']}
-    import_batch['contacts'] = [v['ns'] for k, v in contacts.items(
-    ) if 'ns' in v and v['ns']['mobileNumber'] is not None and v['ns']['optedOut'] is not None]
-    for contact in import_batch['contacts']:
-        contact['allowMobileUpdate'] = 1
+        # Send desired state to Cadence for each contact who has a mobileNumber and an optOut state
+        # https://api.mongooseresearch.com/docs/#operation/Import
+        import_batch = {'notificationEmail': CONFIG['notification_email']}
+        import_batch['contacts'] = [v['ns'] for k, v in contacts.items(
+        ) if 'ns' in v and v['ns']['mobileNumber'] is not None and v['ns']['optedOut'] is not None]
+        for contact in import_batch['contacts']:
+            contact['allowMobileUpdate'] = 1
 
-    # Error checking
-    for c in import_batch['contacts']:
-        if len(c['mobileNumber']) > 11:
-            raise ValueError(c['uniqueCampusId'], c['mobileNumber'])
+        # Error checking
+        for c in import_batch['contacts']:
+            if len(c['mobileNumber']) > 11:
+                raise ValueError(c['uniqueCampusId'], c['mobileNumber'])
 
-    # Update local sync state but do not commit SQL transaction.
-    # Update remote state (Cadence). If successful, commit tran.
-    # This can be improved by explicitly passing a connection around instead of depending on a global.
-    pc_update_last_sync_state(dept, import_batch)
-    if cadence_post_contacts(dept, import_batch) == 200:
-        CURSOR.commit()
+        # Update local sync state but do not commit SQL transaction.
+        # Update remote state (Cadence). If successful, commit tran.
+        # This can be improved by explicitly passing a connection around instead of depending on a global.
+        pc_update_last_sync_state(dept, import_batch)
+        if cadence_post_contacts(dept, import_batch) == 200:
+            CURSOR.commit()

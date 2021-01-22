@@ -161,6 +161,11 @@ for dept in CONFIG['departments']:
     for contact in import_batch['contacts']:
         contact['allowMobileUpdate'] = 1
 
+    # Error checking
+    for c in import_batch['contacts']:
+        if len(c['mobileNumber']) > 11:
+            raise ValueError(c['uniqueCampusId'], c['mobileNumber'])
+
     # Update local sync state but do not commit SQL transaction.
     # Update remote state (Cadence). If successful, commit tran.
     # This can be improved by explicitly passing a connection around instead of depending on a global.

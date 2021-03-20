@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" modified="2021-03-19T23:01:17.836Z" agent="5.0 (Windows)" etag="_gbNFkvhhqTb287_Jj_g" version="14.4.3" type="github">
+<mxfile host="app.diagrams.net" modified="2021-03-20T13:25:08.610Z" agent="5.0 (Windows)" etag="VIEeEAJiOW_VPVxbquwe" version="14.4.3" type="github">
   <diagram id="tNtSsjAIu3jkNco2B10-" name="Page-1">
     <mxGraphModel dx="937" dy="554" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
       <root>
@@ -22,7 +22,7 @@
         <mxCell id="3VQxWGDCQf9m_gTjKVJ_-8" value="config.json" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;imageAspect=0;aspect=fixed;image=https://cdn1.iconfinder.com/data/icons/anycolor-common-type-files-pack/512/json_anycolor-128.png" vertex="1" parent="1">
           <mxGeometry x="425.44" y="110" width="64" height="64" as="geometry" />
         </mxCell>
-        <mxCell id="3VQxWGDCQf9m_gTjKVJ_-14" value="Get contact&lt;br&gt;data per Team" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="3VQxWGDCQf9m_gTjKVJ_-2" target="3VQxWGDCQf9m_gTjKVJ_-17">
+        <mxCell id="3VQxWGDCQf9m_gTjKVJ_-14" value="Get bulk and&lt;br&gt;individual contact data " style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="3VQxWGDCQf9m_gTjKVJ_-2" target="3VQxWGDCQf9m_gTjKVJ_-17">
           <mxGeometry x="0.6944" relative="1" as="geometry">
             <mxPoint x="475.44" y="520" as="targetPoint" />
             <mxPoint as="offset" />

@@ -176,7 +176,7 @@ def main_sync():
 
         # Error checking
         for c in import_batch['contacts']:
-            if len(c['mobileNumber']) > 11:
+            if len(c['mobileNumber']) != 11:
                 raise ValueError(c['uniqueCampusId'], c['mobileNumber'])
 
         # Update local sync state but do not commit SQL transaction.

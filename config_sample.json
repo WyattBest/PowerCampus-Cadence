@@ -7,7 +7,7 @@
     "debug": true,
     "departments": {
         "SS": {
-            "contacts_sproc": "[Campus6].[custom].[CadenceSelContacts]",
+            "contacts_sproc": "[Campus6].[custom].[CadenceSelContactsSS]",
             "custom_fields": {
                 "SP_Credits": "",
                 "SU_Credits": "",

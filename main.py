@@ -2,6 +2,7 @@ from os import write
 import requests
 import json
 import pyodbc
+from requests import api
 
 
 def init_config(config_path):
@@ -15,10 +16,6 @@ def init_config(config_path):
         CONFIG = json.load(file)
 
     API_URL = CONFIG['api_url']
-    api_key = CONFIG['api_key']
-    api_secret = CONFIG['api_secret']
-    HTTP_SESSION = requests.Session()
-    HTTP_SESSION.auth = (api_key, api_secret)
 
     # Microsoft SQL Server connection.
     CNXN = pyodbc.connect(CONFIG['pc_database_string'])
@@ -94,8 +91,9 @@ def pc_update_last_sync_state(dept, import_batch):
 def cadence_post_contacts(dept, import_batch):
     '''Create/update contact in Cadence.'''
 
-    r = HTTP_SESSION.post(API_URL + '/v2/contacts/' +
-                          dept + '/import', json=import_batch)
+    auth = (CONFIG['departments'][dept]['api_key'], CONFIG['departments'][dept]['api_secret'])
+    r = requests.post(API_URL + '/v2/contacts/' + dept +
+                      '/import', json=import_batch, auth=auth)
     r.raise_for_status()
 
     # Append response to JSON file in case we want to check batches later

@@ -1,12 +1,12 @@
 {
     "api_url": " https://api.mongooseresearch.com",
-    "api_key": "xxxx",
-    "api_secret": "xxxx",
     "pc_database_string": "Driver={ODBC Driver 17 for SQL Server};Server=server.school.edu;Database=database;Encrypt=yes;",
     "notification_email": "email@school.edu",
     "debug": true,
     "departments": {
         "SS": {
+            "api_key": "xxxx",
+            "api_secret": "xxxx",
             "contacts_sproc": "[Campus6].[custom].[CadenceSelContactsSS]",
             "custom_fields": {
                 "SP_Credits": "",
@@ -16,6 +16,8 @@
             }
         },
         "FA": {
+            "api_key": "xxxx",
+            "api_secret": "xxxx",
             "contacts_sproc": "[Campus6].[custom].[CadenceSelContactsFA]",
             "custom_fields": {
                 "SP_Credits": "",

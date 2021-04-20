@@ -92,7 +92,8 @@ def cadence_post_contacts(dept, import_batch):
     '''Create/update contact in Cadence.'''
 
     auth = (CONFIG['departments'][dept]['api_key'], CONFIG['departments'][dept]['api_secret'])
-    r = requests.post(API_URL + '/v2/contacts/' + dept +
+    team_code = CONFIG['departments'][dept]['team_code']
+    r = requests.post(API_URL + '/v2/contacts/' + team_code +
                       '/import', json=import_batch, auth=auth)
     r.raise_for_status()
 

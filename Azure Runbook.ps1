@@ -22,8 +22,10 @@
  
 .NOTES 
     AUTHOR: Wyatt Best
-    LASTEDIT: 2020-11-05
+    LASTEDIT: 2021-07-14
 #>
+$errorActionPreference = "Stop"
+
 param( 
     [parameter(Mandatory = $True)]
     [string] $SqlServer,

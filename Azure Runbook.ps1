@@ -22,7 +22,7 @@
  
 .NOTES 
     AUTHOR: Wyatt Best
-    LASTEDIT: 2020-11-05
+    LASTEDIT: 2021-07-14
 #>
 param( 
     [parameter(Mandatory = $True)]
@@ -41,6 +41,7 @@ param(
     [object] $WebhookData
 ) 
 
+$errorActionPreference = "Stop"
 # Write-Output $WebhookData.RequestBody
 
 # Read parameters from HTTP POST body
